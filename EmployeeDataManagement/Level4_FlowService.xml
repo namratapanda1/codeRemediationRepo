@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flow:flowService xmlns:flow="http://www.webmethods.com/flow"
+                  name="EmployeeMasterData_SF_Payroll.hr.prc:transformEmployeeToDBStructure"
+                  description="Maps source Employee IData to the target EmployeeInsertInput IData.">
+
+  <flow:input>
+    <flow:parameter name="Employee" type="IData"/>
+  </flow:input>
+
+  <flow:output>
+    <flow:parameter name="EmployeeInsertInput" type="IData"/>
+  </flow:output>
+
+  <flow:declare>
+    <flow:variable name="homeAddress" type="IData"/>
+    <flow:variable name="insertDoc" type="IData"/>
+  </flow:declare>
+
+  <flow:sequence name="Transform">
+
+    <!-- 1. Call Level 5 to obtain home address (may fail) -->
+    <flow:invoke name="GetHomeAddress"
+                 service="EmployeeMasterData_SF_Payroll.hr.prc:getHomeAddress">
+      <flow:input>
+        <flow:parameter name="ContactInfo"
+                        value="${Employee.ContactInfo}"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="homeAddress" value="${homeAddress}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <!-- 2. Build the target document -->
+    <flow:map name="MapToInsertInput">
+      <flow:input name="src" document="${Employee}"/>
+      <flow:input name="addr" document="${homeAddress}"/>
+      <flow:output name="tgt" document="${insertDoc}"/>
+
+      <!-- Simple 1:1 mappings -->
+      <flow:field name="EMPLOYEE_ID"   source="/Employee/@employeeID"/>
+      <flow:field name="FIRST_NAME"    source="/Employee/PersonalData/FirstName"/>
+      <flow:field name="LAST_NAME"     source="/Employee/PersonalData/LastName"/>
+      <flow:field name="STATUS"        source="/Employee/EmploymentData/Status"/>
+      <flow:field name="DEPARTMENT"    source="/Employee/EmploymentData/Department"/>
+      <flow:field name="JOB_TITLE"     source="/Employee/EmploymentData/JobTitle"/>
+      <flow:field name="HIRE_DATE"     source="/Employee/EmploymentData/HireDate"/>
+
+      <!-- Work email (filter by @type='Work') -->
+      <flow:field name="WORK_EMAIL">
+        <flow:expression>
+          pub.list:filterDocumentList(
+            src.ContactInfo.Emails.Email,
+            "type='Work'"
+          )[0]
+        </flow:expression>
+      </flow:field>
+
+      <!-- Home address fields from Level 5 output -->
+      <flow:field name="HOME_STREET" source="/addr/street"/>
+      <flow:field name="HOME_CITY"   source="/addr/city"/>
+      <flow:field name="HOME_STATE"  source="/addr/state"/>
+      <flow:field name="HOME_ZIP"    source="/addr/zip"/>
+    </flow:map>
+
+    <!-- 3. Return the built document -->
+    <flow:assign name="SetOutput">
+      <flow:expression>EmployeeInsertInput = insertDoc</flow:expression>
+    </flow:assign>
+
+  </flow:sequence>
+</flow:flowService>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flow:flowService xmlns:flow="http://www.webmethods.com/flow"
+                  name="EmployeeMasterData_SF_Payroll.hr.prc:getHomeAddress"
+                  description="Extracts the Home address from ContactInfo.  (Intentionally flawed – does not check for empty result).">
+
+  <flow:input>
+    <flow:parameter name="ContactInfo" type="IData"/>
+  </flow:input>
+
+  <flow:output>
+    <flow:parameter name="homeAddress" type="IData"/>
+  </flow:output>
+
+  <flow:declare>
+    <flow:variable name="addressList" type="java.util.List"/>
+    <flow:variable name="homeAddr"    type="IData"/>
+  </flow:declare>
+
+  <flow:sequence name="ExtractHome">
+
+    <!-- 1. Filter Addresses where @type='Home' -->
+    <flow:invoke name="FilterHome"
+                 service="pub.list:filterDocumentList">
+      <flow:input>
+        <flow:parameter name="documentList"
+                        value="${ContactInfo.Addresses.Address}"/>
+        <flow:parameter name="criteria"
+                        value="@type='Home'"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="documentList" value="${addressList}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <!-- 2. **Flaw** – directly access element 0 without length check -->
+    <flow:map name="MapHomeFields">
+      <flow:input name="src" document="${addressList[0]}"/>
+      <flow:output name="tgt" document="${homeAddr}"/>
+
+      <flow:field name="street" source="/Street1"/>
+      <flow:field name="city"   source="/City"/>
+      <flow:field name="state"  source="/State"/>
+      <flow:field name="zip"    source="/PostalCode"/>
+    </flow:map>
+
+    <flow:assign name="SetResult">
+      <flow:expression>homeAddress = homeAddr</flow:expression>
+    </flow:assign>
+
+  </flow:sequence>
+</flow:flowService>

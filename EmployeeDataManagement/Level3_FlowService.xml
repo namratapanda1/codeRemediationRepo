@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flow:flowService xmlns:flow="http://www.webmethods.com/flow"
+                  name="EmployeeMasterData_SF_Payroll.hr.prc:validateEmployeeData"
+                  description="Performs business‑rule validation that is not covered by the XSD.">
+
+  <flow:input>
+    <flow:parameter name="Employee" type="IData"/>
+  </flow:input>
+
+  <flow:output>
+    <flow:parameter name="Employee" type="IData"/>
+  </flow:output>
+
+  <flow:declare>
+    <flow:variable name="status" type="java.lang.String"/>
+    <flow:variable name="department" type="java.lang.String"/>
+    <flow:variable name="allowedDepts" type="java.util.List"/>
+  </flow:declare>
+
+  <flow:sequence name="Validate">
+
+    <!-- Extract fields -->
+    <flow:invoke name="ExtractFields"
+                 service="pub.xml:getNodeValue">
+      <flow:input>
+        <flow:parameter name="document" value="${Employee}"/>
+        <flow:parameter name="xpath" value="/Employee/EmploymentData/Status"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="value" value="${status}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <flow:invoke name="ExtractDept"
+                 service="pub.xml:getNodeValue">
+      <flow:input>
+        <flow:parameter name="document" value="${Employee}"/>
+        <flow:parameter name="xpath" value="/Employee/EmploymentData/Department"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="value" value="${department}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <!-- Hard‑coded list of valid departments (could be moved to a config) -->
+    <flow:assign name="SetAllowedDepts">
+      <flow:expression>
+        allowedDepts = java.util.Arrays.asList(
+          "Engineering","Finance","HR","Sales","Marketing","Operations"
+        );
+      </flow:expression>
+    </flow:assign>
+
+    <!-- 1. Status must be Active or OnLeave -->
+    <flow:if name="CheckStatus">
+      <flow:condition>
+        <flow:or>
+          <flow:equals left="${status}" right="Active"/>
+          <flow:equals left="${status}" right="OnLeave"/>
+        </flow:or>
+      </flow:condition>
+
+      <!-- OK – continue -->
+      <flow:else>
+        <flow:raise name="InvalidStatus"
+                    exception="FlowException"
+                    message="Employee status '${status}' is not processable."/>
+      </flow:else>
+    </flow:if>
+
+    <!-- 2. Department must be in allowed list -->
+    <flow:if name="CheckDept">
+      <flow:condition>
+        <flow:call name="IsDeptAllowed"
+                   service="pub.util:contains">
+          <flow:input>
+            <flow:parameter name="list" value="${allowedDepts}"/>
+            <flow:parameter name="value" value="${department}"/>
+          </flow:input>
+          <flow:output>
+            <flow:parameter name="result" value="${deptAllowed}"/>
+          </flow:output>
+        </flow:call>
+      </flow:condition>
+
+      <flow:else>
+        <flow:raise name="InvalidDept"
+                    exception="FlowException"
+                    message="Department '${department}' is not recognized."/>
+      </flow:else>
+    </flow:if>
+
+    <!-- Pass employee forward unchanged -->
+    <flow:assign name="PassThrough">
+      <flow:expression>Employee = Employee</flow:expression>
+    </flow:assign>
+
+  </flow:sequence>
+</flow:flowService>

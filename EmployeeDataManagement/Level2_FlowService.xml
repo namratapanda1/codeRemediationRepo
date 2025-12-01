@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flow:flowService xmlns:flow="http://www.webmethods.com/flow"
+                  name="EmployeeMasterData_SF_Payroll.hr.prc:processSingleEmployee"
+                  description="Orchestrates validation, transformation and DB insert for one employee.">
+
+  <flow:input>
+    <flow:parameter name="Employee" type="IData"/>
+  </flow:input>
+
+  <flow:output>
+    <flow:parameter name="status" type="java.lang.String"/>
+  </flow:output>
+
+  <flow:declare>
+    <flow:variable name="validatedEmployee" type="IData"/>
+    <flow:variable name="dbInput" type="IData"/>
+  </flow:declare>
+
+  <flow:sequence name="Orchestrate">
+
+    <!-- 1. Validation (Level 3) -->
+    <flow:invoke name="ValidateEmployee"
+                 service="EmployeeMasterData_SF_Payroll.hr.prc:validateEmployeeData">
+      <flow:input>
+        <flow:parameter name="Employee" value="${Employee}"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="Employee" value="${validatedEmployee}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <!-- 2. Transformation (Level 4) -->
+    <flow:invoke name="TransformEmployee"
+                 service="EmployeeMasterData_SF_Payroll.hr.prc:transformEmployeeToDBStructure">
+      <flow:input>
+        <flow:parameter name="Employee" value="${validatedEmployee}"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="EmployeeInsertInput" value="${dbInput}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <!-- 3. Insert into Payroll DB (Adapter) -->
+    <flow:invoke name="InsertIntoDB"
+                 service="EmployeeMasterData_SF_Payroll.hr.db:insertEmployeeRecord">
+      <flow:input>
+        <flow:parameter name="EmployeeInsertInput" value="${dbInput}"/>
+      </flow:input>
+    </flow:invoke>
+
+    <flow:assign name="SetSuccess">
+      <flow:expression>status = "SUCCESS"</flow:expression>
+    </flow:assign>
+
+  </flow:sequence>
+</flow:flowService>

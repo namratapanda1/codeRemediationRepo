@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<trigger:trigger xmlns:trigger="http://www.webmethods.com/trigger"
+                 name="EmployeeMasterData_SF_Payroll.hr.trigger:trg_receiveEmployeeMasterBatch">
+
+  <!-- Trigger type -->
+  <trigger:type>JMS</trigger:type>
+
+  <!-- Universal Messaging (UM) destination to listen on -->
+  <trigger:destination>q.hr.employee.master.batch</trigger:destination>
+
+  <!-- Connection alias for the UM server (replace with your actual alias) -->
+  <trigger:connectionAlias>JMS_UM_ALIAS</trigger:connectionAlias>
+
+  <!-- Service that will be invoked when a message arrives -->
+  <trigger:service>EmployeeMasterData_SF_Payroll.hr.pub:receiveEmployeeMasterBatch</trigger:service>
+
+  <!-- Message selector (optional – not used here) -->
+  <trigger:selector></trigger:selector>
+
+  <!-- Acknowledgement mode – AUTO means the trigger will acknowledge after the service returns -->
+  <trigger:acknowledgeMode>AUTO</trigger:acknowledgeMode>
+
+  <!-- Concurrency settings (optional) -->
+  <trigger:maxThreads>5</trigger:maxThreads>
+  <trigger:threadPool>JMS_Trigger_ThreadPool</trigger:threadPool>
+
+  <!-- Transaction handling – NONE because the JMS trigger is asynchronous -->
+  <trigger:transactionMode>NONE</trigger:transactionMode>
+
+  <!-- Optional: set a timeout for message receipt (in milliseconds) -->
+  <trigger:receiveTimeout>0</trigger:receiveTimeout>
+
+  <!-- Optional: dead‑letter queue handling (not configured) -->
+  <trigger:deadLetterQueue></trigger:deadLetterQueue>
+
+</trigger:trigger>

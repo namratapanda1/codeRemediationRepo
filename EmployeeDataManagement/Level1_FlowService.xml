@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flow:flowService xmlns:flow="http://www.webmethods.com/flow"
+                  xmlns:is="http://www.webmethods.com/is"
+                  name="EmployeeMasterData_SF_Payroll.hr.pub:receiveEmployeeMasterBatch"
+                  description="Top‑level wrapper that receives the JMS payload, validates the XML, loops over each Employee and handles per‑record errors.">
+
+  
+  <flow:input>
+    <flow:parameter name="jmsMessage" type="java.lang.String"/>
+  </flow:input>
+
+  <flow:output>
+    <flow:parameter name="batchStatus" type="java.lang.String"/>
+  </flow:output>
+
+  <!--PIPELINE VARIABLES-->
+  <flow:declare>
+    <flow:variable name="xmlString" type="java.lang.String"/>
+    <flow:variable name="xmlNode"   type="com.wm.data.XmlNode"/>
+    <flow:variable name="EmployeeMasterData" type="IData"/>
+    <flow:variable name="employeeList" type="java.util.List"/>
+    <flow:variable name="currentEmployee" type="IData"/>
+    <flow:variable name="errorInfo" type="IData"/>
+  </flow:declare>
+
+  <!-- 
+       MAIN LOGIC
+        -->
+  <flow:sequence name="MainSequence">
+
+    <!-- 1. Get the raw XML string from the JMS message -->
+    <flow:assign name="AssignXMLString">
+      <flow:expression>xmlString = jmsMessage</flow:expression>
+    </flow:assign>
+
+    <!-- 2. Convert XML string → XML node -->
+    <flow:invoke name="StringToNode"
+                 service="pub.xml:xmlStringToNode">
+      <flow:input>
+        <flow:parameter name="xmlString" value="${xmlString}"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="xmlNode" value="${xmlNode}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <!-- 3. Validate against XSD -->
+    <flow:invoke name="ValidateXML"
+                 service="pub.schema:validate">
+      <flow:input>
+        <flow:parameter name="xmlNode" value="${xmlNode}"/>
+        <flow:parameter name="schemaLocation" value="employeeSchema.xsd"/>
+      </flow:input>
+    </flow:invoke>
+
+    <!-- 4. Convert XML node → IData document -->
+    <flow:invoke name="NodeToDocument"
+                 service="pub.xml:xmlNodeToDocument">
+      <flow:input>
+        <flow:parameter name="xmlNode" value="${xmlNode}"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="document" value="${EmployeeMasterData}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <!-- 5. Log start of batch -->
+    <flow:invoke name="LogBatchStart"
+                 service="pub.flow:logInfo">
+      <flow:input>
+        <flow:parameter name="message" value="Processing batch of employees..."/>
+      </flow:input>
+    </flow:invoke>
+
+    <!-- 6. Build list of Employee documents -->
+    <flow:invoke name="BuildEmployeeList"
+                 service="pub.list:getDocumentList">
+      <flow:input>
+        <flow:parameter name="document" value="${EmployeeMasterData}"/>
+        <flow:parameter name="xpath" value="/EmployeeMasterData/Employee"/>
+      </flow:input>
+      <flow:output>
+        <flow:parameter name="documentList" value="${employeeList}"/>
+      </flow:output>
+    </flow:invoke>
+
+    <!-- 7. LOOP over each Employee -->
+    <flow:forEach name="LoopEmployees" list="${employeeList}" varName="currentEmployee">
+
+      <!-- TRY / CATCH per employee -->
+      <flow:try name="TryEmployee">
+
+        <!-- Call Level 2 – process a single employee -->
+        <flow:invoke name="ProcessSingleEmployee"
+                     service="EmployeeMasterData_SF_Payroll.hr.prc:processSingleEmployee">
+          <flow:input>
+            <flow:parameter name="Employee" value="${currentEmployee}"/>
+          </flow:input>
+        </flow:invoke>
+
+      </flow:try>
+
+      <flow:catch name="CatchEmployeeError">
+        <!-- Capture the full error dump -->
+        <flow:invoke name="GetLastError"
+                     service="pub.flow:getLastError">
+          <flow:output>
+            <flow:parameter name="errorInfo" value="${errorInfo}"/>
+          </flow:output>
+        </flow:invoke>
+
+        <!-- Extract required fields for logging -->
+        <flow:assign name="PrepareLogData">
+          <flow:expression>
+            errorInfo.document_id = currentEmployee.employeeID;
+            errorInfo.error_code   = "EMP-002-FAIL";
+            errorInfo.service_name = errorInfo.failingService;
+            errorInfo.service_stack= errorInfo.serviceStack;
+            errorInfo.error_dump   = errorInfo.errorDump;
+          </flow:expression>
+        </flow:assign>
+
+        <!-- Log to ent_error_log -->
+        <flow:invoke name="LogErrorToDB"
+                     service="EmployeeMasterData_SF_Payroll.utils:logErrorToDB">
+          <flow:input>
+            <flow:parameter name="errorInfo" value="${errorInfo}"/>
+          </flow:input>
+        </flow:invoke>
+
+        <!-- Continue with next employee (no re‑throw) -->
+      </flow:catch>
+
+    </flow:forEach>
+
+    <!-- 8. Acknowledge JMS message (trigger does this automatically,
+         but we set a flag for clarity) -->
+    <flow:assign name="Acknowledge">
+      <flow:expression>batchStatus = "ACKNOWLEDGED"</flow:expression>
+    </flow:assign>
+
+  </flow:sequence>
+</flow:flowService>
